@@ -1,0 +1,24 @@
+# dependencies
+node_modules/
+
+# next.js build output
+.next/
+out/
+
+# cloudflare
+.vercel/
+.wrangler/
+
+# env / secrets
+.env
+.env.*
+.dev.vars
+*.json.key
+service-account*.json
+
+# testing
+coverage/
+
+# misc
+.DS_Store
+*.log
