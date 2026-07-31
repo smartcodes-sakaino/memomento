@@ -1,0 +1,8 @@
+# このファイルを .dev.vars にコピーして、実際の値を設定してください。
+# .dev.vars は .gitignore 済みのため、リポジトリにはコミットされません。
+# 秘密鍵はサービスアカウントの鍵JSONの "private_key" の値を、改行を \n にした1行で貼り付けます。
+
+GOOGLE_SERVICE_ACCOUNT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
+GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+GOOGLE_SHEET_ID=1Chx2RxOf6EHKaNCgYuvTpC7JgjYeuqpBPlpzXsxSimE
+GOOGLE_DRIVE_FOLDER_ID=your-drive-folder-id
