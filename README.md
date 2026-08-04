@@ -16,7 +16,9 @@
 
 ```bash
 npm ci
-# .dev.vars.example をコピーして .dev.vars を作成し、各値を設定する
+# .dev.vars.example を参考に環境変数ファイルを作成する
+#   - npm run dev (next dev) で使う場合          → .env.local
+#   - npm run preview (wrangler pages dev) の場合 → .dev.vars
 npm run dev
 ```
 
