@@ -271,7 +271,9 @@ export async function uploadImageToDrive(
 
   const res = await googleFetch(
     env,
-    `${DRIVE_UPLOAD}?uploadType=multipart&fields=id`,
+    // supportsAllDrives: 共有ドライブ配下のフォルダへのアップロードに必要
+    // (サービスアカウントは自身の保存容量を持たないため、保存先は共有ドライブとする)
+    `${DRIVE_UPLOAD}?uploadType=multipart&fields=id&supportsAllDrives=true`,
     {
       method: "POST",
       headers: {
@@ -290,7 +292,7 @@ export async function downloadDriveFile(
 ): Promise<Response> {
   return googleFetch(
     env,
-    `${DRIVE_BASE}/files/${encodeURIComponent(fileId)}?alt=media`
+    `${DRIVE_BASE}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`
   );
 }
 
@@ -301,7 +303,7 @@ export async function copySpreadsheet(
 ): Promise<{ fileId: string; url: string }> {
   const res = await googleFetch(
     env,
-    `${DRIVE_BASE}/files/${encodeURIComponent(env.sheetId)}/copy?fields=id,webViewLink`,
+    `${DRIVE_BASE}/files/${encodeURIComponent(env.sheetId)}/copy?fields=id,webViewLink&supportsAllDrives=true`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
