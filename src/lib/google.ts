@@ -295,21 +295,3 @@ export async function downloadDriveFile(
     `${DRIVE_BASE}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`
   );
 }
-
-/** スプレッドシートのコピーをDriveフォルダ内に作成する(バックアップ用) */
-export async function copySpreadsheet(
-  env: GoogleEnv,
-  name: string
-): Promise<{ fileId: string; url: string }> {
-  const res = await googleFetch(
-    env,
-    `${DRIVE_BASE}/files/${encodeURIComponent(env.sheetId)}/copy?fields=id,webViewLink&supportsAllDrives=true`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, parents: [env.driveFolderId] }),
-    }
-  );
-  const json = (await res.json()) as { id: string; webViewLink: string };
-  return { fileId: json.id, url: json.webViewLink };
-}

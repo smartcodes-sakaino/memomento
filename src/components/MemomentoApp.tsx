@@ -22,7 +22,6 @@ import { HOME_PAGE_ID } from "@/lib/types";
 import {
   apiCreatePage,
   apiDeletePage,
-  apiExport,
   apiFetchAll,
   apiHealth,
   apiPatchPage,
@@ -134,7 +133,6 @@ export default function MemomentoApp() {
   const [saveState, setSaveState] = useState<SaveState>("ok");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [health, setHealth] = useState<{ sheets: boolean; drive: boolean } | null>(null);
-  const [exporting, setExporting] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
 
   type TypeMenuState = { x: number; y: number; blockId: string | null; insertBelow: boolean };
@@ -1273,24 +1271,20 @@ export default function MemomentoApp() {
             <div className="panel-section-label">バックアップ</div>
             <button
               className="primary-btn"
-              disabled={exporting}
-              onClick={async () => {
-                setExporting(true);
-                try {
-                  const { url } = await apiExport();
-                  toast("バックアップを作成しました");
-                  window.open(url, "_blank", "noopener");
-                } catch (e) {
-                  toast(e instanceof Error ? e.message : "バックアップに失敗しました");
-                } finally {
-                  setExporting(false);
-                }
+              onClick={() => {
+                const a = document.createElement("a");
+                a.href = "/api/export";
+                a.download = "";
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                toast("バックアップをダウンロードしています");
               }}
             >
-              {exporting ? "作成中…" : "今すぐエクスポート"}
+              今すぐエクスポート
             </button>
             <p className="panel-note">
-              スプレッドシートのコピーをGoogle Driveの「Memomento」フォルダ内に作成します。
+              全データ(ページとブロック)をJSONファイルとしてこのPCにダウンロードします。
             </p>
           </div>
         </div>

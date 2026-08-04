@@ -61,10 +61,6 @@ export async function apiUploadImage(file: File): Promise<{ url: string }> {
   return request("/api/images", { method: "POST", body: form });
 }
 
-export function apiExport(): Promise<{ url: string }> {
-  return request("/api/export");
-}
-
 export function apiHealth(): Promise<{ sheets: boolean; drive: boolean }> {
   return request("/api/health");
 }
