@@ -38,8 +38,8 @@ describe("htmlToText", () => {
 });
 
 describe("renderPagesAsMarkdown", () => {
-  it("見出し・タグ・パスが含まれる", () => {
-    const pages = [page("home", "ホーム", null)];
+  it("見出しに本文が続く。アイコンやパス表記などの飾りは含まれない", () => {
+    const pages = [page("home", "ホーム", null, { icon: "🏠" })];
     const blocks: Block[] = [
       {
         id: "b1",
@@ -52,28 +52,44 @@ describe("renderPagesAsMarkdown", () => {
       },
     ];
     const md = renderPagesAsMarkdown(pages, blocks);
-    expect(md).toContain("## 🗒️ ホーム");
+    expect(md).toContain("## ホーム");
     expect(md).toContain("本文です");
+    expect(md).not.toContain("🏠");
+    expect(md).not.toContain("パス:");
+    expect(md).not.toContain("---");
+    expect(md).not.toContain("Memomento エクスポート");
   });
 
-  it("親ページの直後に子ページが続く(階層順)", () => {
+  it("親子関係は見出しレベルの深さで表現される(##→###→####)", () => {
     const pages = [
       page("home", "ホーム", null),
       page("study", "学習ノート", "home", { tags: ["学習"] }),
       page("ch1", "第1章", "study"),
     ];
     const md = renderPagesAsMarkdown(pages, []);
-    const iHome = md.indexOf("## 🗒️ ホーム");
-    const iStudy = md.indexOf("## 🗒️ 学習ノート");
-    const iCh1 = md.indexOf("## 🗒️ 第1章");
-    expect(iHome).toBeGreaterThanOrEqual(0);
+    expect(md).toContain("## ホーム");
+    expect(md).toContain("### 学習ノート");
+    expect(md).toContain("#### 第1章");
+    expect(md).toContain("タグ: #学習");
+    const iHome = md.indexOf("## ホーム");
+    const iStudy = md.indexOf("### 学習ノート");
+    const iCh1 = md.indexOf("#### 第1章");
     expect(iStudy).toBeGreaterThan(iHome);
     expect(iCh1).toBeGreaterThan(iStudy);
-    expect(md).toContain("パス: ホーム / 学習ノート / 第1章");
-    expect(md).toContain("タグ: #学習");
   });
 
-  it("チェックリスト・表・画像がMarkdown表現になる", () => {
+  it("ページ内の見出しブロックは、ページの見出しレベルより深くなる", () => {
+    const pages = [page("home", "ホーム", null)];
+    const blocks: Block[] = [
+      { id: "b1", pageId: "home", orderIndex: 0, type: "heading1", content: { html: "節1" }, createdAt: "", updatedAt: "" },
+      { id: "b2", pageId: "home", orderIndex: 1, type: "heading2", content: { html: "節2" }, createdAt: "", updatedAt: "" },
+    ];
+    const md = renderPagesAsMarkdown(pages, blocks);
+    expect(md).toContain("### 節1");
+    expect(md).toContain("#### 節2");
+  });
+
+  it("チェックリスト・表がMarkdown表現になり、キャプション無しの画像は出力されない", () => {
     const pages = [page("home", "ホーム", null)];
     const blocks: Block[] = [
       {
@@ -99,7 +115,7 @@ describe("renderPagesAsMarkdown", () => {
         pageId: "home",
         orderIndex: 2,
         type: "image",
-        content: { src: "/api/images/x", caption: "図解" },
+        content: { src: "/api/images/x", caption: "" },
         createdAt: "",
         updatedAt: "",
       },
@@ -108,9 +124,17 @@ describe("renderPagesAsMarkdown", () => {
     expect(md).toContain("- [x] やる");
     expect(md).toContain("- [ ] まだ");
     expect(md).toContain("| A | B |");
-    expect(md).toContain("(画像: 図解)");
-    // 内部APIのURLは埋め込まれない(NotebookLM側からアクセスできないため)
+    expect(md).not.toContain("画像");
     expect(md).not.toContain("/api/images/x");
+  });
+
+  it("画像にキャプションがあれば出力される", () => {
+    const pages = [page("home", "ホーム", null)];
+    const blocks: Block[] = [
+      { id: "b1", pageId: "home", orderIndex: 0, type: "image", content: { src: "/api/images/x", caption: "図解" }, createdAt: "", updatedAt: "" },
+    ];
+    const md = renderPagesAsMarkdown(pages, blocks);
+    expect(md).toContain("(画像: 図解)");
   });
 
   it("ブロックが無いページでも壊れない", () => {
@@ -118,7 +142,7 @@ describe("renderPagesAsMarkdown", () => {
     expect(md).toContain("ホーム");
   });
 
-  it("includeIdsを指定すると選択したページだけが本文になる", () => {
+  it("includeIdsを指定すると選択したページだけが本文になる(見出しレベルは元の深さを保つ)", () => {
     const pages = [
       page("home", "ホーム", null),
       page("study", "学習ノート", "home"),
@@ -128,11 +152,9 @@ describe("renderPagesAsMarkdown", () => {
       { id: "b1", pageId: "ch1", orderIndex: 0, type: "paragraph", content: { html: "章の本文" }, createdAt: "", updatedAt: "" },
     ];
     const md = renderPagesAsMarkdown(pages, blocks, new Set(["ch1"]));
-    expect(md).not.toContain("## 🗒️ ホーム");
-    expect(md).not.toContain("## 🗒️ 学習ノート");
-    expect(md).toContain("## 🗒️ 第1章");
-    // 選択されていない祖先でも、パス表示には名前が残る(文脈のため)
-    expect(md).toContain("パス: ホーム / 学習ノート / 第1章");
+    expect(md).not.toContain("ホーム");
+    expect(md).not.toContain("学習ノート");
+    expect(md).toContain("#### 第1章");
     expect(md).toContain("章の本文");
   });
 

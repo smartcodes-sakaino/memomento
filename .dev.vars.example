@@ -6,3 +6,5 @@ GOOGLE_SERVICE_ACCOUNT_EMAIL=your-service-account@your-project.iam.gserviceaccou
 GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 GOOGLE_SHEET_ID=1Chx2RxOf6EHKaNCgYuvTpC7JgjYeuqpBPlpzXsxSimE
 GOOGLE_DRIVE_FOLDER_ID=your-drive-folder-id
+# NotebookLM用ドキュメントの保存先(未設定ならGOOGLE_DRIVE_FOLDER_IDと同じ場所になる)
+GOOGLE_NOTEBOOKLM_FOLDER_ID=your-notebooklm-folder-id

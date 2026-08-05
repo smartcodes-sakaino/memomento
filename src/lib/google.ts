@@ -18,6 +18,8 @@ export interface GoogleEnv {
   privateKeyPem: string;
   sheetId: string;
   driveFolderId: string;
+  /** NotebookLM用ドキュメントの保存先。画像フォルダとは別の共有ドライブ内フォルダを想定 */
+  notebookFolderId: string;
 }
 
 export function readEnv(): GoogleEnv {
@@ -26,6 +28,7 @@ export function readEnv(): GoogleEnv {
     GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: key,
     GOOGLE_SHEET_ID: sheetId,
     GOOGLE_DRIVE_FOLDER_ID: folderId,
+    GOOGLE_NOTEBOOKLM_FOLDER_ID: notebookFolderId,
   } = process.env;
   if (!email || !key || !sheetId || !folderId) {
     throw new GoogleApiError(
@@ -39,6 +42,8 @@ export function readEnv(): GoogleEnv {
     privateKeyPem: key.replace(/\\n/g, "\n"),
     sheetId,
     driveFolderId: folderId,
+    // 未設定の場合は画像フォルダにフォールバックする(設定必須にはしない)
+    notebookFolderId: notebookFolderId || folderId,
   };
 }
 
@@ -312,7 +317,7 @@ export async function createDriveDoc(
       headers: { "Content-Type": "application/json; charset=UTF-8" },
       body: JSON.stringify({
         name,
-        parents: [env.driveFolderId],
+        parents: [env.notebookFolderId],
         mimeType: "application/vnd.google-apps.document",
       }),
     }

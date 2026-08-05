@@ -2,6 +2,10 @@
  * ページ・ブロックを1つのMarkdown文書に変換する。
  * NotebookLM等の外部ツールに読ませる「ソース」書き出し用。
  * Edge runtime(DOM無し)で動くよう、HTML→テキスト変換は正規表現で行う。
+ *
+ * ソースとしてのノイズを減らすため、アプリ内部の飾り(ページアイコン)や
+ * システム的な表記(パンくず、区切り線)は出力しない。ページの親子関係は
+ * 見出しレベル(##→###→####…)そのもので表現する。
  */
 
 import { childrenOf } from "./tree";
@@ -11,6 +15,13 @@ import type {
   ListItem,
   Page,
 } from "./types";
+
+const MAX_HEADING_LEVEL = 6;
+
+function heading(level: number, text: string): string {
+  const hashes = "#".repeat(Math.min(Math.max(level, 1), MAX_HEADING_LEVEL));
+  return `${hashes} ${text}`;
+}
 
 export function htmlToText(html: string): string {
   return html
@@ -39,12 +50,13 @@ function renderTable(rows: string[][]): string {
   return [header, sep, ...body].map((r) => `| ${r.join(" | ")} |`).join("\n");
 }
 
-function renderBlock(b: Block): string {
+/** pageLevel: このページの見出しレベル(##なら2)。ブロック内見出しはこれより深くする */
+function renderBlock(b: Block, pageLevel: number): string {
   switch (b.type) {
     case "heading1":
-      return `### ${htmlToText((b.content as { html: string }).html)}`;
+      return heading(pageLevel + 1, htmlToText((b.content as { html: string }).html));
     case "heading2":
-      return `#### ${htmlToText((b.content as { html: string }).html)}`;
+      return heading(pageLevel + 2, htmlToText((b.content as { html: string }).html));
     case "paragraph":
       return htmlToText((b.content as { html: string }).html);
     case "quote":
@@ -67,7 +79,7 @@ function renderBlock(b: Block): string {
       return renderTable((b.content as { rows: string[][] }).rows);
     case "image": {
       const caption = (b.content as { src: string; caption: string }).caption;
-      return caption ? `(画像: ${caption})` : "(画像)";
+      return caption ? `(画像: ${caption})` : "";
     }
     default:
       return "";
@@ -95,38 +107,36 @@ export function renderPagesAsMarkdown(
     arr.sort((a, c) => a.orderIndex - c.orderIndex);
   }
 
-  const lines: string[] = ["# Memomento エクスポート", ""];
+  const lines: string[] = [];
   let emitted = 0;
 
-  function visit(page: Page, pathTitles: string[]) {
+  function visit(page: Page, depth: number) {
     const title = page.title || "無題のページ";
-    const path = [...pathTitles, title];
+    const level = Math.min(2 + depth, MAX_HEADING_LEVEL);
 
     if (!includeIds || includeIds.has(page.id)) {
-      lines.push(`## ${page.icon ? page.icon + " " : ""}${title}`);
-      if (path.length > 1) lines.push(`パス: ${path.join(" / ")}`);
+      lines.push(heading(level, title));
       if (page.tags.length > 0) lines.push(`タグ: ${page.tags.map((t) => `#${t}`).join(" ")}`);
       lines.push("");
 
       for (const b of blocksByPage.get(page.id) ?? []) {
-        const text = renderBlock(b);
+        const text = renderBlock(b, level);
         if (text) lines.push(text, "");
       }
-      lines.push("---", "");
       emitted++;
     }
 
     // 選択されていないページの配下に選択済みページがあるかもしれないため、探索は続ける
     for (const child of childrenOf(pages, page.id)) {
-      visit(child, path);
+      visit(child, depth + 1);
     }
   }
 
   for (const root of childrenOf(pages, null)) {
-    visit(root, []);
+    visit(root, 0);
   }
 
-  if (emitted === 0) lines.push("(選択されたページに内容がありません)");
+  if (emitted === 0) return "(選択されたページに内容がありません)";
 
-  return lines.join("\n");
+  return lines.join("\n").trim();
 }
