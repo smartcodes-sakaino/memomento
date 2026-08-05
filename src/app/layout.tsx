@@ -24,6 +24,9 @@ const zenMaru = Zen_Maru_Gothic({
 export const metadata: Metadata = {
   title: "Memomento — 日々の小さな瞬間をメモに",
   description: "個人用のメモ・学習ノートアプリ",
+  // app/icon.png の自動ルートは Cloudflare Pages (Edge) と相性が悪いため、
+  // public/ の静的ファイルを明示的に指定する
+  icons: { icon: "/icon.png" },
 };
 
 export default function RootLayout({
