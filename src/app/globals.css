@@ -86,6 +86,7 @@ button { font-family: inherit; }
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 .brand { padding: 18px 16px 10px; }
 .brand img { width: 100%; max-width: 210px; height: auto; display: block; }
@@ -137,7 +138,7 @@ button { font-family: inherit; }
 }
 .icon-btn:hover { background: var(--surface-lowest); color: var(--ink); }
 
-.tree { flex: 1; overflow-y: auto; padding: 0 10px 16px; }
+.tree { flex: 1; min-height: 0; overflow-y: auto; padding: 0 10px 16px; }
 .tree-row {
   display: flex; align-items: center; gap: 4px;
   padding: 6px 8px;
@@ -203,7 +204,7 @@ button { font-family: inherit; }
 .dot.error { background: var(--error); }
 
 /* ---------- Main ---------- */
-.main { display: flex; flex-direction: column; min-width: 0; }
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .topbar {
   height: 52px; flex: none;
   display: flex; align-items: center; justify-content: space-between;
@@ -223,7 +224,7 @@ button { font-family: inherit; }
 }
 .ghost-btn:hover { border-color: var(--pink-deep); color: var(--on-pink); background: var(--surface-low); }
 
-.editor-scroll { flex: 1; overflow-y: auto; padding: 8px 32px 48px; }
+.editor-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 32px 48px; }
 
 /* 「1枚の紙」カード */
 .paper {
