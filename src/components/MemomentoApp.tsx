@@ -22,6 +22,7 @@ import { HOME_PAGE_ID } from "@/lib/types";
 import {
   apiCreatePage,
   apiDeletePage,
+  apiExportNotebookLM,
   apiFetchAll,
   apiHealth,
   apiPatchPage,
@@ -132,6 +133,10 @@ export default function MemomentoApp() {
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("ok");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [nbOpen, setNbOpen] = useState(false);
+  const [nbSelected, setNbSelected] = useState<Set<string>>(new Set());
+  const [nbTitle, setNbTitle] = useState("");
+  const [nbBusy, setNbBusy] = useState(false);
   const [health, setHealth] = useState<{ sheets: boolean; drive: boolean } | null>(null);
   const [toastMsg, setToastMsg] = useState("");
 
@@ -1287,8 +1292,106 @@ export default function MemomentoApp() {
               全データ(ページとブロック)をJSONファイルとしてこのPCにダウンロードします。
             </p>
           </div>
+          <div>
+            <div className="panel-section-label">NotebookLM用ソース</div>
+            <button
+              className="primary-btn"
+              onClick={() => {
+                setNbSelected(new Set());
+                setNbTitle("");
+                setNbOpen(true);
+              }}
+            >
+              ページを選んで作成
+            </button>
+            <p className="panel-note">
+              選んだページの内容を整形し、新しいGoogleドキュメントとしてMemomentoフォルダに作成します(既存のドキュメントは上書きしません)。作成後、NotebookLMの「ソースを追加」→「Google Drive」からこのドキュメントを選べます。
+            </p>
+          </div>
         </div>
       </div>
+
+      {/* ================= NotebookLM用ページ選択モーダル ================= */}
+      {nbOpen && (
+        <>
+          <div className="modal-scrim" onClick={() => !nbBusy && setNbOpen(false)} />
+          <div className="modal">
+            <div className="modal-head">
+              <h2>NotebookLM用ソースを作成</h2>
+              <button className="icon-btn" onClick={() => !nbBusy && setNbOpen(false)}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="panel-note">書き出したいページにチェックを付けてください(複数選択可)。</p>
+              <div className="nb-tree">
+                {m.rootOrder.map((id) => {
+                  const p = pageOf(id);
+                  return p ? (
+                    <NbTreeRow
+                      key={id}
+                      page={p}
+                      pageOf={pageOf}
+                      selected={nbSelected}
+                      onToggle={(id2) =>
+                        setNbSelected((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(id2)) next.delete(id2);
+                          else next.add(id2);
+                          return next;
+                        })
+                      }
+                    />
+                  ) : null;
+                })}
+              </div>
+              <div className="nb-title-row">
+                <label className="panel-section-label" htmlFor="nb-title-input">
+                  ドキュメント名(空欄で自動生成)
+                </label>
+                <input
+                  id="nb-title-input"
+                  type="text"
+                  className="nb-title-input"
+                  placeholder="例: Memomento - 学習ノート"
+                  value={nbTitle}
+                  onChange={(e) => setNbTitle(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="modal-foot">
+              <button className="ghost-btn" disabled={nbBusy} onClick={() => setNbOpen(false)}>
+                キャンセル
+              </button>
+              <button
+                className="primary-btn"
+                disabled={nbBusy || nbSelected.size === 0}
+                onClick={async () => {
+                  setNbBusy(true);
+                  try {
+                    const { url } = await apiExportNotebookLM(
+                      Array.from(nbSelected),
+                      nbTitle.trim() || undefined
+                    );
+                    toast("NotebookLM用ドキュメントを作成しました");
+                    setNbOpen(false);
+                    window.open(url, "_blank", "noopener");
+                  } catch (e) {
+                    toast(e instanceof Error ? e.message : "作成に失敗しました");
+                  } finally {
+                    setNbBusy(false);
+                  }
+                }}
+              >
+                {nbBusy ? "作成中…" : `作成(${nbSelected.size}件)`}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       <div className={"toast" + (toastMsg ? " show" : "")}>{toastMsg}</div>
 
@@ -1302,6 +1405,40 @@ export default function MemomentoApp() {
           if (file) void onImageFileSelected(file);
         }}
       />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- NotebookLM用ページ選択ツリー
+
+function NbTreeRow({
+  page,
+  pageOf,
+  selected,
+  onToggle,
+}: {
+  page: ClientPage;
+  pageOf: (id: string) => ClientPage | undefined;
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <div className="nb-row">
+      <label className="nb-row-label">
+        <input type="checkbox" checked={selected.has(page.id)} onChange={() => onToggle(page.id)} />
+        <span className="nb-row-icon">{page.icon}</span>
+        <span>{page.title || "無題のページ"}</span>
+      </label>
+      {page.childOrder.length > 0 && (
+        <div className="nb-children">
+          {page.childOrder.map((cid) => {
+            const cp = pageOf(cid);
+            return cp ? (
+              <NbTreeRow key={cid} page={cp} pageOf={pageOf} selected={selected} onToggle={onToggle} />
+            ) : null;
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -64,3 +64,14 @@ export async function apiUploadImage(file: File): Promise<{ url: string }> {
 export function apiHealth(): Promise<{ sheets: boolean; drive: boolean }> {
   return request("/api/health");
 }
+
+export function apiExportNotebookLM(
+  pageIds: string[],
+  title?: string
+): Promise<{ url: string; name: string }> {
+  return request("/api/notebooklm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pageIds, title }),
+  });
+}

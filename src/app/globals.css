@@ -551,6 +551,47 @@ button { font-family: inherit; }
 
 input[type="file"] { display: none; }
 
+/* ---------- NotebookLM用ページ選択モーダル ---------- */
+.modal-scrim {
+  position: fixed; inset: 0; background: rgba(68, 42, 34, 0.28);
+  backdrop-filter: blur(4px); z-index: 70;
+}
+.modal {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 480px; max-width: 92vw; max-height: 80vh;
+  background: var(--surface-lowest); border-radius: var(--r-md);
+  box-shadow: var(--shadow-lift); z-index: 71;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px 12px; flex: none;
+}
+.modal-head h2 { font-size: 16px; margin: 0; font-weight: 700; }
+.modal-body { padding: 0 20px 14px; overflow-y: auto; flex: 1; }
+.modal-foot {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 14px 20px; border-top: 1px solid var(--surface-high); flex: none;
+}
+.nb-tree {
+  border: 1px solid var(--surface-high); border-radius: var(--r); padding: 8px 10px;
+  max-height: 260px; overflow-y: auto; margin-top: 6px; background: var(--surface-low);
+}
+.nb-row-label {
+  display: flex; align-items: center; gap: 8px; padding: 5px 4px;
+  font-size: 13.5px; cursor: pointer; border-radius: 8px;
+}
+.nb-row-label:hover { background: var(--surface-container); }
+.nb-row-label input[type="checkbox"] { accent-color: var(--pink-deep); width: 15px; height: 15px; }
+.nb-row-icon { font-size: 13px; }
+.nb-children { margin-left: 20px; border-left: 2px dotted var(--outline-variant); padding-left: 6px; }
+.nb-title-row { margin-top: 14px; }
+.nb-title-input {
+  width: 100%; margin-top: 4px; border: none; border-bottom: 2px dotted var(--outline-variant);
+  padding: 6px 2px; font-size: 13px; background: transparent; color: var(--ink); outline: none; font-family: inherit;
+}
+.nb-title-input:focus { border-bottom-color: var(--pink-deep); }
+
 .loading-screen {
   height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
   color: var(--ink-dim); font-size: 14px;

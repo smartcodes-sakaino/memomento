@@ -10,6 +10,7 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const SCOPES = [
   "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/drive.file",
+  "https://www.googleapis.com/auth/documents",
 ].join(" ");
 
 export interface GoogleEnv {
@@ -284,6 +285,51 @@ export async function uploadImageToDrive(
   );
   const json = (await res.json()) as { id: string };
   return { fileId: json.id };
+}
+
+const DOCS_BASE = "https://docs.googleapis.com/v1/documents";
+
+/**
+ * テキストを新規のGoogleドキュメントとしてDriveフォルダに作成する。
+ * (NotebookLM等の外部ツール用ソースの書き出し。常に新規作成し、上書きはしない
+ *  — 選択内容ごとに別ファイルとして永続的に残すため)
+ *
+ * Drive APIの「テキストファイルをアップロードしてGoogleドキュメントに変換」経路は
+ * 絵文字などの非ASCII文字を正しく扱えないことがあるため、空のドキュメントを作成した後
+ * Docs APIのbatchUpdate(JSON経由)で本文を流し込む方式にしている。JSON文字列としての
+ * 送信は他のAPI(ページ更新など)と同じ経路なので、日本語・絵文字とも正しく保存される。
+ */
+export async function createDriveDoc(
+  env: GoogleEnv,
+  name: string,
+  text: string
+): Promise<{ fileId: string; url: string }> {
+  const createRes = await googleFetch(
+    env,
+    `${DRIVE_BASE}/files?fields=id,webViewLink&supportsAllDrives=true`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=UTF-8" },
+      body: JSON.stringify({
+        name,
+        parents: [env.driveFolderId],
+        mimeType: "application/vnd.google-apps.document",
+      }),
+    }
+  );
+  const created = (await createRes.json()) as { id: string; webViewLink: string };
+
+  if (text) {
+    await googleFetch(env, `${DOCS_BASE}/${created.id}:batchUpdate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=UTF-8" },
+      body: JSON.stringify({
+        requests: [{ insertText: { location: { index: 1 }, text } }],
+      }),
+    });
+  }
+
+  return { fileId: created.id, url: created.webViewLink };
 }
 
 export async function downloadDriveFile(
