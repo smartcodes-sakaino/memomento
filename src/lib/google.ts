@@ -11,6 +11,10 @@ const SCOPES = [
   "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/drive.file",
   "https://www.googleapis.com/auth/documents",
+  // Googleドキュメントの取り込み機能用。書き込みは引き続き drive.file (アプリが作成した
+  // ファイルのみ)に限定されており、これは「リンクを知っている全員」等で共有された
+  // 既存ドキュメントを読み取るためだけに追加している
+  "https://www.googleapis.com/auth/drive.readonly",
 ].join(" ");
 
 export interface GoogleEnv {
@@ -335,6 +339,15 @@ export async function createDriveDoc(
   }
 
   return { fileId: created.id, url: created.webViewLink };
+}
+
+/** Googleドキュメントの内容を取得する(取り込み機能用)。タブ機能を使ったドキュメントにも対応する */
+export async function getGoogleDoc(env: GoogleEnv, docId: string): Promise<unknown> {
+  const res = await googleFetch(
+    env,
+    `${DOCS_BASE}/${encodeURIComponent(docId)}?includeTabsContent=true`
+  );
+  return res.json();
 }
 
 export async function downloadDriveFile(

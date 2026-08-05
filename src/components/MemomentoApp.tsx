@@ -25,6 +25,7 @@ import {
   apiExportNotebookLM,
   apiFetchAll,
   apiHealth,
+  apiImportGoogleDoc,
   apiPatchPage,
   apiPutBlocks,
   apiUploadImage,
@@ -133,6 +134,9 @@ export default function MemomentoApp() {
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("ok");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importUrl, setImportUrl] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
   const [nbOpen, setNbOpen] = useState(false);
   const [nbSelected, setNbSelected] = useState<Set<string>>(new Set());
   const [nbTitle, setNbTitle] = useState("");
@@ -1029,6 +1033,15 @@ export default function MemomentoApp() {
           >
             ＋ サブページを追加
           </button>
+          <button
+            className="ghost-btn"
+            onClick={() => {
+              setImportUrl("");
+              setImportOpen(true);
+            }}
+          >
+            📄 Googleドキュメントから追加
+          </button>
         </div>
         <div className="editor-scroll">
           <div className="paper">
@@ -1310,6 +1323,77 @@ export default function MemomentoApp() {
           </div>
         </div>
       </div>
+
+      {/* ================= Googleドキュメント取り込みモーダル ================= */}
+      {importOpen && (
+        <>
+          <div className="modal-scrim" onClick={() => !importBusy && setImportOpen(false)} />
+          <div className="modal">
+            <div className="modal-head">
+              <h2>Googleドキュメントから追加</h2>
+              <button className="icon-btn" onClick={() => !importBusy && setImportOpen(false)}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="panel-note">
+                取り込みたいGoogleドキュメントのURL(またはID)を入力してください。「{currentPage.title || "無題のページ"}
+                」の下に新しいページとして追加されます。見出し・箇条書き・番号付きリスト・表は保たれますが、それ以外の書式(色や画像など)は取り込まれません。
+              </p>
+              <div className="nb-title-row">
+                <label className="panel-section-label" htmlFor="import-url-input">
+                  GoogleドキュメントのURL
+                </label>
+                <input
+                  id="import-url-input"
+                  type="text"
+                  className="nb-title-input"
+                  placeholder="https://docs.google.com/document/d/..."
+                  value={importUrl}
+                  onChange={(e) => setImportUrl(e.target.value)}
+                />
+              </div>
+              <p className="panel-note">
+                事前に、このドキュメントを「リンクを知っている全員(閲覧者)」に共有しておいてください。
+              </p>
+            </div>
+            <div className="modal-foot">
+              <button className="ghost-btn" disabled={importBusy} onClick={() => setImportOpen(false)}>
+                キャンセル
+              </button>
+              <button
+                className="primary-btn"
+                disabled={importBusy || !importUrl.trim()}
+                onClick={async () => {
+                  setImportBusy(true);
+                  try {
+                    const { page: imported } = await apiImportGoogleDoc({
+                      docUrlOrId: importUrl.trim(),
+                      parentId: currentPageId,
+                    });
+                    const { pages } = await apiFetchAll();
+                    modelRef.current = fromServer(pages);
+                    offlineRef.current = false;
+                    setExpanded((ex) => ({ ...ex, [currentPageId]: true }));
+                    setImportOpen(false);
+                    toast(`「${imported.title || "無題のページ"}」を取り込みました`);
+                    selectPage(imported.id);
+                  } catch (e) {
+                    toast(e instanceof Error ? e.message : "取り込みに失敗しました");
+                  } finally {
+                    setImportBusy(false);
+                  }
+                }}
+              >
+                {importBusy ? "取り込み中…" : "取り込む"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ================= NotebookLM用ページ選択モーダル ================= */}
       {nbOpen && (

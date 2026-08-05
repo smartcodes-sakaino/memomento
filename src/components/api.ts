@@ -65,6 +65,18 @@ export function apiHealth(): Promise<{ sheets: boolean; drive: boolean }> {
   return request("/api/health");
 }
 
+export function apiImportGoogleDoc(input: {
+  docUrlOrId: string;
+  parentId: string | null;
+  title?: string;
+}): Promise<{ page: PageWithBlocks }> {
+  return request("/api/import-doc", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
 export function apiExportNotebookLM(
   pageIds: string[],
   title?: string
