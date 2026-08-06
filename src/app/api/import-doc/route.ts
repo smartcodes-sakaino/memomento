@@ -79,7 +79,9 @@ export async function POST(req: Request) {
           break;
         case "bulletlist":
         case "numberlist":
-          content = { items: ib.items.map((it) => ({ id: `i_${crypto.randomUUID()}`, text: it.text })) };
+          content = {
+            items: ib.items.map((it) => ({ id: `i_${crypto.randomUUID()}`, text: it.text, level: it.level })),
+          };
           break;
         default:
           content = { html: ib.html };

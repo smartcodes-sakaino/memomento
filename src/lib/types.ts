@@ -27,12 +27,18 @@ export interface ChecklistItem {
   id: string;
   text: string;
   done: boolean;
+  /** 階層の深さ(0=最上位)。未設定は0として扱う */
+  level?: number;
 }
 
 export interface ListItem {
   id: string;
   text: string;
+  /** 階層の深さ(0=最上位)。未設定は0として扱う */
+  level?: number;
 }
+
+export const MAX_LIST_LEVEL = 5;
 
 export type BlockContent =
   | { html: string } // heading1 / heading2 / paragraph / quote / code

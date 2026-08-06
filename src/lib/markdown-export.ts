@@ -50,6 +50,20 @@ function renderTable(rows: string[][]): string {
   return [header, sep, ...body].map((r) => `| ${r.join(" | ")} |`).join("\n");
 }
 
+/** 階層(level)付きの項目をMarkdownの入れ子リストとして書き出す。番号は階層ごとに振り直す */
+function renderOutlineItems(items: { text: string; level?: number }[], ordered: boolean): string {
+  const counters = [0, 0, 0, 0, 0, 0];
+  return items
+    .map((it) => {
+      const level = Math.min(Math.max(it.level ?? 0, 0), counters.length - 1);
+      counters[level] += 1;
+      for (let d = level + 1; d < counters.length; d++) counters[d] = 0;
+      const marker = ordered ? `${counters[level]}.` : "-";
+      return `${"  ".repeat(level)}${marker} ${it.text}`;
+    })
+    .join("\n");
+}
+
 /** pageLevel: このページの見出しレベル(##なら2)。ブロック内見出しはこれより深くする */
 function renderBlock(b: Block, pageLevel: number): string {
   switch (b.type) {
@@ -65,16 +79,12 @@ function renderBlock(b: Block, pageLevel: number): string {
       return "```\n" + htmlToText((b.content as { html: string }).html) + "\n```";
     case "checklist":
       return (b.content as { items: ChecklistItem[] }).items
-        .map((i) => `- [${i.done ? "x" : " "}] ${i.text}`)
+        .map((i) => `${"  ".repeat(Math.min(Math.max(i.level ?? 0, 0), 5))}- [${i.done ? "x" : " "}] ${i.text}`)
         .join("\n");
     case "bulletlist":
-      return (b.content as { items: ListItem[] }).items
-        .map((i) => `- ${i.text}`)
-        .join("\n");
+      return renderOutlineItems((b.content as { items: ListItem[] }).items, false);
     case "numberlist":
-      return (b.content as { items: ListItem[] }).items
-        .map((i, idx) => `${idx + 1}. ${i.text}`)
-        .join("\n");
+      return renderOutlineItems((b.content as { items: ListItem[] }).items, true);
     case "table":
       return renderTable((b.content as { rows: string[][] }).rows);
     case "image": {

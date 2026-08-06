@@ -65,7 +65,7 @@ export interface DocsApiDocument {
 
 export type ImportedBlock =
   | { type: "heading1" | "heading2" | "paragraph" | "quote"; html: string }
-  | { type: "bulletlist" | "numberlist"; items: { text: string }[] }
+  | { type: "bulletlist" | "numberlist"; items: { text: string; level: number }[] }
   | { type: "table"; rows: string[][] };
 
 /** ドキュメントURL、または生のドキュメントIDを受け取り、IDを取り出す */
@@ -171,7 +171,9 @@ export function parseGoogleDoc(
 ): { title: string; blocks: ImportedBlock[] } {
   const { title, content, lists } = selectTabContent(doc, tabId);
   const blocks: ImportedBlock[] = [];
-  let listBuffer: { type: "bulletlist" | "numberlist"; items: { text: string }[]; listId: string } | null = null;
+  let listBuffer:
+    | { type: "bulletlist" | "numberlist"; items: { text: string; level: number }[]; listId: string }
+    | null = null;
 
   function flushList() {
     if (listBuffer && listBuffer.items.length > 0) {
@@ -187,14 +189,13 @@ export function parseGoogleDoc(
 
       if (p.bullet) {
         if (!text.trim()) continue;
-        const type = isOrderedList(lists, p.bullet.listId, p.bullet.nestingLevel ?? 0)
-          ? "numberlist"
-          : "bulletlist";
+        const nestingLevel = p.bullet.nestingLevel ?? 0;
+        const type = isOrderedList(lists, p.bullet.listId, nestingLevel) ? "numberlist" : "bulletlist";
         if (!listBuffer || listBuffer.type !== type || listBuffer.listId !== p.bullet.listId) {
           flushList();
           listBuffer = { type, items: [], listId: p.bullet.listId };
         }
-        listBuffer.items.push({ text: text.trim() });
+        listBuffer.items.push({ text: text.trim(), level: Math.min(Math.max(nestingLevel, 0), 5) });
         continue;
       }
 

@@ -104,7 +104,13 @@ describe("parseGoogleDoc(タブ対応)", () => {
       ],
     };
     expect(parseGoogleDoc(doc, "t.a").blocks).toEqual([
-      { type: "numberlist", items: [{ text: "番号1" }, { text: "番号2" }] },
+      {
+        type: "numberlist",
+        items: [
+          { text: "番号1", level: 0 },
+          { text: "番号2", level: 0 },
+        ],
+      },
     ]);
   });
 
@@ -165,7 +171,13 @@ describe("parseGoogleDoc", () => {
     };
     const { blocks } = parseGoogleDoc(doc);
     expect(blocks).toEqual([
-      { type: "bulletlist", items: [{ text: "1個目" }, { text: "2個目" }] },
+      {
+        type: "bulletlist",
+        items: [
+          { text: "1個目", level: 0 },
+          { text: "2個目", level: 0 },
+        ],
+      },
       { type: "paragraph", html: "本文に戻る" },
     ]);
   });
@@ -181,7 +193,13 @@ describe("parseGoogleDoc", () => {
       },
     };
     expect(parseGoogleDoc(doc).blocks).toEqual([
-      { type: "numberlist", items: [{ text: "手順1" }, { text: "手順2" }] },
+      {
+        type: "numberlist",
+        items: [
+          { text: "手順1", level: 0 },
+          { text: "手順2", level: 0 },
+        ],
+      },
     ]);
   });
 
@@ -196,8 +214,37 @@ describe("parseGoogleDoc", () => {
       },
     };
     expect(parseGoogleDoc(doc).blocks).toEqual([
-      { type: "bulletlist", items: [{ text: "A-1" }] },
-      { type: "bulletlist", items: [{ text: "B-1" }] },
+      { type: "bulletlist", items: [{ text: "A-1", level: 0 }] },
+      { type: "bulletlist", items: [{ text: "B-1", level: 0 }] },
+    ]);
+  });
+
+  it("入れ子(nestingLevel)のある箇条書きは、階層(level)を保ったまま同じブロックにまとまる", () => {
+    const doc: DocsApiDocument = {
+      lists: {
+        L1: {
+          listProperties: {
+            nestingLevels: [{}, {}],
+          },
+        },
+      },
+      body: {
+        content: [
+          para("親", { bullet: { listId: "L1", nestingLevel: 0 } }),
+          para("子", { bullet: { listId: "L1", nestingLevel: 1 } }),
+          para("親2", { bullet: { listId: "L1", nestingLevel: 0 } }),
+        ],
+      },
+    };
+    expect(parseGoogleDoc(doc).blocks).toEqual([
+      {
+        type: "bulletlist",
+        items: [
+          { text: "親", level: 0 },
+          { text: "子", level: 1 },
+          { text: "親2", level: 0 },
+        ],
+      },
     ]);
   });
 

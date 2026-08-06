@@ -89,6 +89,34 @@ describe("renderPagesAsMarkdown", () => {
     expect(md).toContain("#### 節2");
   });
 
+  it("階層(level)付きの箇条書き/番号付きリストは、インデントと階層ごとの番号で出力される", () => {
+    const pages = [page("home", "ホーム", null)];
+    const blocks: Block[] = [
+      {
+        id: "b1",
+        pageId: "home",
+        orderIndex: 0,
+        type: "numberlist",
+        content: {
+          items: [
+            { id: "i1", text: "親1", level: 0 },
+            { id: "i2", text: "子1", level: 1 },
+            { id: "i3", text: "子2", level: 1 },
+            { id: "i4", text: "親2", level: 0 },
+          ],
+        },
+        createdAt: "",
+        updatedAt: "",
+      },
+    ];
+    const md = renderPagesAsMarkdown(pages, blocks);
+    const lines = md.split("\n").filter((l) => l.trim());
+    expect(lines).toContain("1. 親1");
+    expect(lines).toContain("  1. 子1");
+    expect(lines).toContain("  2. 子2");
+    expect(lines).toContain("2. 親2");
+  });
+
   it("チェックリスト・表がMarkdown表現になり、キャプション無しの画像は出力されない", () => {
     const pages = [page("home", "ホーム", null)];
     const blocks: Block[] = [

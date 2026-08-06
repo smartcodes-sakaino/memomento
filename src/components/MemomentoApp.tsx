@@ -18,7 +18,7 @@ import {
   useState,
 } from "react";
 import { escapeHtml, syncLinkLabels } from "@/lib/wikilink";
-import { HOME_PAGE_ID } from "@/lib/types";
+import { HOME_PAGE_ID, MAX_LIST_LEVEL } from "@/lib/types";
 import {
   apiCreatePage,
   apiDeletePage,
@@ -1803,6 +1803,88 @@ function TextBlockView({
   );
 }
 
+// ---------------------------------------------------------------- リスト共通(Tab階層変更・十字キー移動)
+
+function placeCaretInField(el: HTMLElement, offset: number) {
+  el.focus();
+  const node = el.firstChild;
+  const range = document.createRange();
+  if (node && node.nodeType === Node.TEXT_NODE) {
+    const len = node.textContent?.length ?? 0;
+    range.setStart(node, Math.max(0, Math.min(offset, len)));
+  } else {
+    range.selectNodeContents(el);
+  }
+  range.collapse(true);
+  const sel = window.getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(range);
+}
+
+function getCaretOffset(el: HTMLElement): number {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) return 0;
+  return sel.getRangeAt(0).startOffset;
+}
+
+function focusListItemField(blockId: string, itemId: string, selector: string, offset: number) {
+  setTimeout(() => {
+    const el = document.querySelector<HTMLElement>(
+      `[data-block-id="${blockId}"] [data-item-id="${itemId}"] ${selector}`
+    );
+    if (el) placeCaretInField(el, offset);
+  }, 0);
+}
+
+/**
+ * リスト項目の共通キー操作。
+ * Tab/Shift+Tabで階層(level)を1段変更し、ArrowUp/ArrowDownで前後の項目にフォーカス移動する。
+ * 処理した(=呼び出し元でこれ以上何もしなくてよい)場合はtrueを返す。
+ */
+function handleOutlineKeyDown(
+  e: React.KeyboardEvent<HTMLElement>,
+  items: { id: string; level?: number }[],
+  itemId: string,
+  blockId: string,
+  selector: string,
+  onLevelChange: () => void
+): boolean {
+  const idx = items.findIndex((it) => it.id === itemId);
+  if (idx === -1) return false;
+
+  if (e.key === "Tab") {
+    e.preventDefault();
+    const item = items[idx];
+    const level = item.level ?? 0;
+    if (e.shiftKey) {
+      if (level > 0) {
+        item.level = level - 1;
+        onLevelChange();
+      }
+    } else {
+      const prevLevel = idx > 0 ? items[idx - 1].level ?? 0 : 0;
+      if (idx > 0 && level < prevLevel + 1 && level < MAX_LIST_LEVEL) {
+        item.level = level + 1;
+        onLevelChange();
+      }
+    }
+    const offset = getCaretOffset(e.currentTarget);
+    focusListItemField(blockId, itemId, selector, offset);
+    return true;
+  }
+
+  if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+    const targetIdx = e.key === "ArrowUp" ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= items.length) return false;
+    e.preventDefault();
+    const offset = getCaretOffset(e.currentTarget);
+    focusListItemField(blockId, items[targetIdx].id, selector, offset);
+    return true;
+  }
+
+  return false;
+}
+
 function ChecklistView({
   block,
   editor,
@@ -1816,7 +1898,12 @@ function ChecklistView({
       <div className="block-body">
         <div className="items">
           {block.items.map((item) => (
-            <div key={item.id} className={"chk-item" + (item.done ? " done" : "")}>
+            <div
+              key={item.id}
+              className={"chk-item" + (item.done ? " done" : "")}
+              style={{ marginLeft: (item.level ?? 0) * 22 }}
+              data-item-id={item.id}
+            >
               <button
                 className="chk-circle"
                 aria-label={item.done ? "完了を解除" : "完了にする"}
@@ -1840,11 +1927,18 @@ function ChecklistView({
                   editor.onSoftChange();
                 }}
                 onKeyDown={(e) => {
+                  if (
+                    handleOutlineKeyDown(e, block.items, item.id, block.id, ".chk-text", () =>
+                      editor.onStructuralChange()
+                    )
+                  ) {
+                    return;
+                  }
                   if (e.key === "Enter") {
                     e.preventDefault();
                     item.text = e.currentTarget.textContent ?? "";
                     const idx = block.items.indexOf(item);
-                    block.items.splice(idx + 1, 0, { id: uid("i"), text: "", done: false });
+                    block.items.splice(idx + 1, 0, { id: uid("i"), text: "", done: false, level: item.level });
                     editor.onStructuralChange();
                   }
                 }}
@@ -1866,6 +1960,20 @@ function ChecklistView({
   );
 }
 
+const BULLET_MARKERS = ["•", "◦", "▪"];
+
+/** 番号付きリストの表示番号を、階層(level)ごとに振り直して計算する */
+function computeOutlineMarkers(items: { level?: number }[], ordered: boolean): string[] {
+  const counters = [0, 0, 0, 0, 0, 0];
+  return items.map((it) => {
+    const level = Math.min(Math.max(it.level ?? 0, 0), counters.length - 1);
+    if (!ordered) return BULLET_MARKERS[Math.min(level, BULLET_MARKERS.length - 1)];
+    counters[level] += 1;
+    for (let d = level + 1; d < counters.length; d++) counters[d] = 0;
+    return `${counters[level]}.`;
+  });
+}
+
 function ListView({
   block,
   editor,
@@ -1873,14 +1981,20 @@ function ListView({
   block: Extract<ClientBlock, { type: "bulletlist" | "numberlist" }>;
   editor: EditorProps;
 }) {
+  const markers = computeOutlineMarkers(block.items, block.type === "numberlist");
   return (
     <div className={`block-row b-${block.type}`} data-block-id={block.id}>
       <BlockControls blockId={block.id} onOpenTypeMenu={editor.onOpenTypeMenu} />
       <div className="block-body">
         <div className="items">
           {block.items.map((item, idx) => (
-            <div key={item.id} className="list-item">
-              <div className="marker">{block.type === "numberlist" ? `${idx + 1}.` : "•"}</div>
+            <div
+              key={item.id}
+              className="list-item"
+              style={{ marginLeft: (item.level ?? 0) * 22 }}
+              data-item-id={item.id}
+            >
+              <div className="marker">{markers[idx]}</div>
               <div
                 className="list-text"
                 contentEditable
@@ -1893,11 +2007,18 @@ function ListView({
                   editor.onSoftChange();
                 }}
                 onKeyDown={(e) => {
+                  if (
+                    handleOutlineKeyDown(e, block.items, item.id, block.id, ".list-text", () =>
+                      editor.onStructuralChange()
+                    )
+                  ) {
+                    return;
+                  }
                   if (e.key === "Enter") {
                     e.preventDefault();
                     item.text = e.currentTarget.textContent ?? "";
                     const i = block.items.indexOf(item);
-                    block.items.splice(i + 1, 0, { id: uid("i"), text: "" });
+                    block.items.splice(i + 1, 0, { id: uid("i"), text: "", level: item.level });
                     editor.onStructuralChange();
                   }
                 }}
