@@ -1838,12 +1838,13 @@ function focusListItemField(blockId: string, itemId: string, selector: string, o
 
 /**
  * リスト項目の共通キー操作。
- * Tab/Shift+Tabで階層(level)を1段変更し、ArrowUp/ArrowDownで前後の項目にフォーカス移動する。
+ * Tab/Shift+Tabで階層(level)を1段変更し、ArrowUp/ArrowDownで前後の項目にフォーカス移動し、
+ * 行頭でのBackspaceで1つ前の項目に統合(空行ならただ削除)する。
  * 処理した(=呼び出し元でこれ以上何もしなくてよい)場合はtrueを返す。
  */
 function handleOutlineKeyDown(
   e: React.KeyboardEvent<HTMLElement>,
-  items: { id: string; level?: number }[],
+  items: { id: string; text: string; level?: number }[],
   itemId: string,
   blockId: string,
   selector: string,
@@ -1851,6 +1852,33 @@ function handleOutlineKeyDown(
 ): boolean {
   const idx = items.findIndex((it) => it.id === itemId);
   if (idx === -1) return false;
+
+  if (e.key === "Backspace") {
+    const el = e.currentTarget;
+    const offset = getCaretOffset(el);
+    const sel = window.getSelection();
+    if (offset === 0 && (sel?.isCollapsed ?? true)) {
+      const currentText = el.textContent ?? "";
+      if (idx > 0) {
+        e.preventDefault();
+        const prev = items[idx - 1];
+        const mergeAt = prev.text.length;
+        prev.text = prev.text + currentText;
+        items.splice(idx, 1);
+        onLevelChange();
+        focusListItemField(blockId, prev.id, selector, mergeAt);
+        return true;
+      }
+      if (currentText === "" && items.length > 1) {
+        e.preventDefault();
+        items.splice(idx, 1);
+        onLevelChange();
+        focusListItemField(blockId, items[0].id, selector, 0);
+        return true;
+      }
+    }
+    return false;
+  }
 
   if (e.key === "Tab") {
     e.preventDefault();
