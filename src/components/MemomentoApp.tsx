@@ -2067,8 +2067,10 @@ function ChecklistView({
                     e.preventDefault();
                     item.text = e.currentTarget.innerHTML;
                     const idx = block.items.indexOf(item);
-                    block.items.splice(idx + 1, 0, { id: uid("i"), text: "", done: false, level: item.level });
+                    const ni = { id: uid("i"), text: "", done: false, level: item.level };
+                    block.items.splice(idx + 1, 0, ni);
                     editor.onStructuralChange();
+                    focusListItemField(block.id, ni.id, ".chk-text", 0);
                   }
                 }}
               />
@@ -2078,8 +2080,10 @@ function ChecklistView({
         <div
           className="chk-add"
           onClick={() => {
-            block.items.push({ id: uid("i"), text: "", done: false });
+            const ni = { id: uid("i"), text: "", done: false };
+            block.items.push(ni);
             editor.onStructuralChange();
+            focusListItemField(block.id, ni.id, ".chk-text", 0);
           }}
         >
           ＋ 項目を追加
@@ -2146,8 +2150,10 @@ function ListView({
                     e.preventDefault();
                     item.text = e.currentTarget.innerHTML;
                     const i = block.items.indexOf(item);
-                    block.items.splice(i + 1, 0, { id: uid("i"), text: "", level: item.level });
+                    const ni = { id: uid("i"), text: "", level: item.level };
+                    block.items.splice(i + 1, 0, ni);
                     editor.onStructuralChange();
+                    focusListItemField(block.id, ni.id, ".list-text", 0);
                   }
                 }}
               />
@@ -2157,8 +2163,10 @@ function ListView({
         <div
           className="list-add"
           onClick={() => {
-            block.items.push({ id: uid("i"), text: "" });
+            const ni = { id: uid("i"), text: "" };
+            block.items.push(ni);
             editor.onStructuralChange();
+            focusListItemField(block.id, ni.id, ".list-text", 0);
           }}
         >
           ＋ 項目を追加
