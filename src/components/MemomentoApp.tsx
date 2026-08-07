@@ -160,6 +160,7 @@ export default function MemomentoApp() {
   const pendingRangeRef = useRef<Range | null>(null);
   const pendingContainerRef = useRef<HTMLElement | null>(null);
   const pendingBlockIdRef = useRef<string | null>(null);
+  const pendingItemIdRef = useRef<string | null>(null);
   const blockSaveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const pagePatchTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const offlineRef = useRef(false);
@@ -459,6 +460,16 @@ export default function MemomentoApp() {
   // ---------------- ブロック操作 ----------------
   const currentBlocks = () => pageOf(currentPageIdRef.current)?.blocks ?? [];
 
+  /** checklist/bulletlist/numberlistブロックの中から項目を1つ探す */
+  const findListItem = (
+    blockId: string,
+    itemId: string
+  ): { id: string; text: string; level?: number } | null => {
+    const b = currentBlocks().find((x) => x.id === blockId);
+    if (!b || (b.type !== "checklist" && b.type !== "bulletlist" && b.type !== "numberlist")) return null;
+    return b.items.find((it) => it.id === itemId) ?? null;
+  };
+
   const focusBlock = useCallback((blockId: string) => {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -542,7 +553,7 @@ export default function MemomentoApp() {
 
   // ---------------- wikiリンク ----------------
   const goToWikiTarget = useCallback(
-    async (a: HTMLAnchorElement, containerEl: HTMLElement, blockId: string) => {
+    async (a: HTMLAnchorElement, containerEl: HTMLElement, blockId: string, itemId?: string) => {
       const pageId = a.getAttribute("data-page-id");
       if (pageId && pageOf(pageId)) {
         selectPage(pageId);
@@ -563,11 +574,19 @@ export default function MemomentoApp() {
           el.setAttribute("data-page-id", newId);
           el.classList.remove("is-new");
         });
-      const blocks = currentBlocks();
-      const b = blocks.find((x) => x.id === blockId);
-      if (b && isTexty(b)) {
-        b.html = containerEl.innerHTML;
-        scheduleBlockSave(currentPageIdRef.current);
+      if (itemId) {
+        const item = findListItem(blockId, itemId);
+        if (item) {
+          item.text = containerEl.innerHTML;
+          scheduleBlockSave(currentPageIdRef.current);
+        }
+      } else {
+        const blocks = currentBlocks();
+        const b = blocks.find((x) => x.id === blockId);
+        if (b && isTexty(b)) {
+          b.html = containerEl.innerHTML;
+          scheduleBlockSave(currentPageIdRef.current);
+        }
       }
       toast(`新しいページ「${title}」を作成しました`);
       selectPage(newId);
@@ -650,10 +669,11 @@ export default function MemomentoApp() {
 
   // ---------------- 選択範囲メニュー ----------------
   const openSelMenu = useCallback(
-    (x: number, y: number, container: HTMLElement, blockId: string, range: Range) => {
+    (x: number, y: number, container: HTMLElement, blockId: string, range: Range, itemId?: string) => {
       pendingRangeRef.current = range.cloneRange();
       pendingContainerRef.current = container;
       pendingBlockIdRef.current = blockId;
+      pendingItemIdRef.current = itemId ?? null;
       setSelMenu({ x, y, mode: "menu" });
     },
     []
@@ -664,6 +684,7 @@ export default function MemomentoApp() {
       const range = pendingRangeRef.current;
       const container = pendingContainerRef.current;
       const blockId = pendingBlockIdRef.current;
+      const itemId = pendingItemIdRef.current;
       if (!range || !container || !blockId) return;
       const sel = window.getSelection();
       sel?.removeAllRanges();
@@ -676,15 +697,24 @@ export default function MemomentoApp() {
         range.insertNode(wrapper);
       }
       sel?.removeAllRanges();
-      const blocks = currentBlocks();
-      const b = blocks.find((x) => x.id === blockId);
-      if (b && isTexty(b)) {
-        b.html = container.innerHTML;
-        scheduleBlockSave(currentPageIdRef.current);
+      if (itemId) {
+        const item = findListItem(blockId, itemId);
+        if (item) {
+          item.text = container.innerHTML;
+          scheduleBlockSave(currentPageIdRef.current);
+        }
+      } else {
+        const blocks = currentBlocks();
+        const b = blocks.find((x) => x.id === blockId);
+        if (b && isTexty(b)) {
+          b.html = container.innerHTML;
+          scheduleBlockSave(currentPageIdRef.current);
+        }
       }
       pendingRangeRef.current = null;
       pendingContainerRef.current = null;
       pendingBlockIdRef.current = null;
+      pendingItemIdRef.current = null;
       setSelMenu(null);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1075,15 +1105,17 @@ export default function MemomentoApp() {
                   b && (b.type === "heading1" || b.type === "heading2") ? "paragraph" : b?.type ?? "paragraph";
                 insertBlock(blockId, nextType as ClientBlock["type"]);
               }}
-              onWikilinkClick={(a, container, blockId) => void goToWikiTarget(a, container, blockId)}
+              onWikilinkClick={(a, container, blockId, itemId) =>
+                void goToWikiTarget(a, container, blockId, itemId)
+              }
               onCalloutClick={(el) => {
                 const r = el.getBoundingClientRect();
                 setCallout({ x: r.left, y: r.bottom + 8, text: el.getAttribute("data-note") ?? "(メモなし)" });
               }}
-              onContextSelection={(x, y, container, blockId) => {
+              onContextSelection={(x, y, container, blockId, itemId) => {
                 const sel = window.getSelection();
                 if (sel?.rangeCount && !sel.isCollapsed) {
-                  openSelMenu(x, y, container, blockId, sel.getRangeAt(0));
+                  openSelMenu(x, y, container, blockId, sel.getRangeAt(0), itemId);
                 }
               }}
               onOpenTypeMenu={(x, y, blockId, insertBelow) =>
@@ -1579,9 +1611,9 @@ interface EditorProps {
   onAddTag: (tag: string) => void;
   onTextInput: (blockId: string, container: HTMLElement) => void;
   onTextEnter: (blockId: string) => void;
-  onWikilinkClick: (a: HTMLAnchorElement, container: HTMLElement, blockId: string) => void;
+  onWikilinkClick: (a: HTMLAnchorElement, container: HTMLElement, blockId: string, itemId?: string) => void;
   onCalloutClick: (el: HTMLElement) => void;
-  onContextSelection: (x: number, y: number, container: HTMLElement, blockId: string) => void;
+  onContextSelection: (x: number, y: number, container: HTMLElement, blockId: string, itemId?: string) => void;
   onOpenTypeMenu: (x: number, y: number, blockId: string | null, insertBelow: boolean) => void;
   onStructuralChange: () => void;
   onSoftChange: () => void;
@@ -1858,18 +1890,22 @@ function handleOutlineKeyDown(
     const offset = getCaretOffset(el);
     const sel = window.getSelection();
     if (offset === 0 && (sel?.isCollapsed ?? true)) {
-      const currentText = el.textContent ?? "";
+      const currentHtml = el.innerHTML ?? "";
+      const isEmpty = (el.textContent ?? "").trim() === "";
       if (idx > 0) {
         e.preventDefault();
         const prev = items[idx - 1];
-        const mergeAt = prev.text.length;
-        prev.text = prev.text + currentText;
+        // prevがプレーンテキストなら正確な位置に、リッチな内容なら先頭にカーソルを置く
+        // (複数ノードにまたがる正確な文字オフセット計算は行わない簡易対応)
+        const prevIsPlain = !/<[a-z][\s\S]*>/i.test(prev.text);
+        const mergeAt = prevIsPlain ? prev.text.length : 0;
+        prev.text = prev.text + currentHtml;
         items.splice(idx, 1);
         onLevelChange();
         focusListItemField(blockId, prev.id, selector, mergeAt);
         return true;
       }
-      if (currentText === "" && items.length > 1) {
+      if (isEmpty && items.length > 1) {
         e.preventDefault();
         items.splice(idx, 1);
         onLevelChange();
@@ -1913,6 +1949,72 @@ function handleOutlineKeyDown(
   return false;
 }
 
+/**
+ * checklist/bulletlist/numberlist の1項目のテキスト欄。
+ * 見出し・本文ブロックと同じく、wikiリンククリック・吹き出しクリック・右クリックの
+ * リッチテキストメニュー(太字/文字色/リンク/吹き出し)に対応する。
+ */
+function OutlineTextField({
+  className,
+  html,
+  editor,
+  blockId,
+  itemId,
+  onInput,
+  onKeyDown,
+}: {
+  className: string;
+  html: string;
+  editor: EditorProps;
+  blockId: string;
+  itemId: string;
+  onInput: (html: string) => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.innerHTML = syncLinkLabels(html, editor.titles);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      className={className}
+      contentEditable
+      suppressContentEditableWarning
+      onInput={(e) => onInput(e.currentTarget.innerHTML)}
+      onKeyDown={onKeyDown}
+      onClick={(e) => {
+        const target = e.target as HTMLElement;
+        const link = target.closest?.("a.wikilink");
+        if (link && ref.current) {
+          e.preventDefault();
+          e.stopPropagation();
+          editor.onWikilinkClick(link as HTMLAnchorElement, ref.current, blockId, itemId);
+          return;
+        }
+        const co = target.closest?.(".callout-inline");
+        if (co) {
+          e.preventDefault();
+          e.stopPropagation();
+          editor.onCalloutClick(co as HTMLElement);
+        }
+      }}
+      onContextMenu={(e) => {
+        const sel = window.getSelection();
+        if (sel?.rangeCount && !sel.isCollapsed && ref.current?.contains(sel.anchorNode)) {
+          e.preventDefault();
+          editor.onContextSelection(e.clientX, e.clientY, ref.current, blockId, itemId);
+        }
+      }}
+    />
+  );
+}
+
 function ChecklistView({
   block,
   editor,
@@ -1943,15 +2045,14 @@ function ChecklistView({
               >
                 ✓
               </button>
-              <div
+              <OutlineTextField
                 className="chk-text"
-                contentEditable
-                suppressContentEditableWarning
-                ref={(el) => {
-                  if (el && el.textContent !== item.text) el.textContent = item.text;
-                }}
-                onInput={(e) => {
-                  item.text = e.currentTarget.textContent ?? "";
+                html={item.text}
+                editor={editor}
+                blockId={block.id}
+                itemId={item.id}
+                onInput={(html) => {
+                  item.text = html;
                   editor.onSoftChange();
                 }}
                 onKeyDown={(e) => {
@@ -1964,7 +2065,7 @@ function ChecklistView({
                   }
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    item.text = e.currentTarget.textContent ?? "";
+                    item.text = e.currentTarget.innerHTML;
                     const idx = block.items.indexOf(item);
                     block.items.splice(idx + 1, 0, { id: uid("i"), text: "", done: false, level: item.level });
                     editor.onStructuralChange();
@@ -2023,15 +2124,14 @@ function ListView({
               data-item-id={item.id}
             >
               <div className="marker">{markers[idx]}</div>
-              <div
+              <OutlineTextField
                 className="list-text"
-                contentEditable
-                suppressContentEditableWarning
-                ref={(el) => {
-                  if (el && el.textContent !== item.text) el.textContent = item.text;
-                }}
-                onInput={(e) => {
-                  item.text = e.currentTarget.textContent ?? "";
+                html={item.text}
+                editor={editor}
+                blockId={block.id}
+                itemId={item.id}
+                onInput={(html) => {
+                  item.text = html;
                   editor.onSoftChange();
                 }}
                 onKeyDown={(e) => {
@@ -2044,7 +2144,7 @@ function ListView({
                   }
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    item.text = e.currentTarget.textContent ?? "";
+                    item.text = e.currentTarget.innerHTML;
                     const i = block.items.indexOf(item);
                     block.items.splice(i + 1, 0, { id: uid("i"), text: "", level: item.level });
                     editor.onStructuralChange();

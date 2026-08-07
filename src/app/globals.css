@@ -327,13 +327,15 @@ button { font-family: inherit; }
 }
 .b-code .b-content { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; white-space: pre-wrap; }
 
-.b-content .wikilink {
+.b-content .wikilink, .chk-text .wikilink, .list-text .wikilink {
   background: var(--blue); color: var(--on-blue); border-radius: 6px;
   padding: 1px 6px; text-decoration: none; font-weight: 700; cursor: pointer;
   border-bottom: 1.5px dashed var(--blue-fixed);
 }
-.b-content .wikilink.is-new { background: var(--cream); color: #8a6d1f; border-bottom-color: #e3cf8e; }
-.b-content code {
+.b-content .wikilink.is-new, .chk-text .wikilink.is-new, .list-text .wikilink.is-new {
+  background: var(--cream); color: #8a6d1f; border-bottom-color: #e3cf8e;
+}
+.b-content code, .chk-text code, .list-text code {
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
   background: var(--surface-low); border-radius: 5px; padding: 1px 6px; font-size: 0.9em;
 }

@@ -59,7 +59,7 @@ function renderOutlineItems(items: { text: string; level?: number }[], ordered: 
       counters[level] += 1;
       for (let d = level + 1; d < counters.length; d++) counters[d] = 0;
       const marker = ordered ? `${counters[level]}.` : "-";
-      return `${"  ".repeat(level)}${marker} ${it.text}`;
+      return `${"  ".repeat(level)}${marker} ${htmlToText(it.text)}`;
     })
     .join("\n");
 }
@@ -79,7 +79,10 @@ function renderBlock(b: Block, pageLevel: number): string {
       return "```\n" + htmlToText((b.content as { html: string }).html) + "\n```";
     case "checklist":
       return (b.content as { items: ChecklistItem[] }).items
-        .map((i) => `${"  ".repeat(Math.min(Math.max(i.level ?? 0, 0), 5))}- [${i.done ? "x" : " "}] ${i.text}`)
+        .map(
+          (i) =>
+            `${"  ".repeat(Math.min(Math.max(i.level ?? 0, 0), 5))}- [${i.done ? "x" : " "}] ${htmlToText(i.text)}`
+        )
         .join("\n");
     case "bulletlist":
       return renderOutlineItems((b.content as { items: ListItem[] }).items, false);
