@@ -37,3 +37,20 @@ export function syncLinkLabels(
     return `${open}${escapeHtml(title)}${close}`;
   });
 }
+
+/**
+ * ユーザー入力を外部リンク用のURLに正規化する。
+ * スキームが省略されていれば https:// を補い、http/https以外(javascript: 等)は拒否する。
+ */
+export function normalizeExternalUrl(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  const withScheme = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const u = new URL(withScheme);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}

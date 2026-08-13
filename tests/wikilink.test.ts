@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractLinkedPageIds, syncLinkLabels } from "@/lib/wikilink";
+import { extractLinkedPageIds, normalizeExternalUrl, syncLinkLabels } from "@/lib/wikilink";
 
 describe("extractLinkedPageIds", () => {
   it("HTML内のdata-page-idを全て抽出する", () => {
@@ -39,5 +39,27 @@ describe("syncLinkLabels(ページ名変更への追従)", () => {
   it("リンク以外のHTMLは変更されない", () => {
     const html = "<strong>太字</strong>と<em>斜体</em>";
     expect(syncLinkLabels(html, new Map())).toBe(html);
+  });
+});
+
+describe("normalizeExternalUrl", () => {
+  it("スキーム付きのURLはそのまま使える", () => {
+    expect(normalizeExternalUrl("https://example.com/path")).toBe("https://example.com/path");
+  });
+  it("スキームが省略されていればhttps://を補う", () => {
+    expect(normalizeExternalUrl("example.com")).toBe("https://example.com/");
+  });
+  it("前後の空白は取り除かれる", () => {
+    expect(normalizeExternalUrl("  example.com  ")).toBe("https://example.com/");
+  });
+  it("http/https以外のスキーム(javascript:等)は拒否される", () => {
+    expect(normalizeExternalUrl("javascript:alert(1)")).toBeNull();
+  });
+  it("空文字はnull", () => {
+    expect(normalizeExternalUrl("")).toBeNull();
+    expect(normalizeExternalUrl("   ")).toBeNull();
+  });
+  it("URLとして解釈不能な文字列はnull", () => {
+    expect(normalizeExternalUrl("http://")).toBeNull();
   });
 });

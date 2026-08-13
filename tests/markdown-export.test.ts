@@ -17,10 +17,20 @@ function page(id: string, title: string, parentId: string | null, opts: Partial<
 }
 
 describe("htmlToText", () => {
-  it("リンクは表示テキストだけになる", () => {
+  it("wikiリンクは表示テキストだけになる", () => {
     expect(htmlToText('参加者: <a class="wikilink" data-page-id="p1">田中さん</a>')).toBe(
       "参加者: 田中さん"
     );
+  });
+  it("外部リンクはMarkdownのリンク記法(URL付き)になる", () => {
+    expect(
+      htmlToText('詳細は<a class="ext-link" href="https://example.com/">こちら</a>です')
+    ).toBe("詳細は[こちら](https://example.com/)です");
+  });
+  it("外部リンクは属性の順序が入れ替わっても解釈できる", () => {
+    expect(
+      htmlToText('<a href="https://example.com/" target="_blank" class="ext-link">example</a>')
+    ).toBe("[example](https://example.com/)");
   });
   it("太字・斜体・コードはMarkdown記法に変換される", () => {
     expect(htmlToText("<strong>太字</strong>と<em>斜体</em>と<code>code</code>")).toBe(

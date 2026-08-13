@@ -17,7 +17,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { escapeHtml, syncLinkLabels } from "@/lib/wikilink";
+import { escapeHtml, normalizeExternalUrl, syncLinkLabels } from "@/lib/wikilink";
 import { HOME_PAGE_ID, MAX_LIST_LEVEL } from "@/lib/types";
 import {
   apiCreatePage,
@@ -145,7 +145,7 @@ export default function MemomentoApp() {
   const [toastMsg, setToastMsg] = useState("");
 
   type TypeMenuState = { x: number; y: number; blockId: string | null; insertBelow: boolean };
-  type SelMenuState = { x: number; y: number; mode: "menu" | "link" | "callout" };
+  type SelMenuState = { x: number; y: number; mode: "menu" | "link" | "extlink" | "callout" };
   type IconPickerState = { x: number; y: number; pageId: string };
   type CalloutState = { x: number; y: number; text: string };
 
@@ -1200,7 +1200,9 @@ export default function MemomentoApp() {
                     }}
                     onClick={() => {
                       const span = document.createElement("span");
-                      if (sw.value) span.style.color = sw.value;
+                      // 「既定」も明示的に標準の文字色を指定する(空のままだと、既に
+                      // 色付けされた親要素の中では色が上書きされず戻らないため)
+                      span.style.color = sw.value || "var(--ink)";
                       applyWrap(span);
                     }}
                   />
@@ -1210,6 +1212,10 @@ export default function MemomentoApp() {
               <div className="menu-item" onClick={() => setSelMenu({ ...selMenu, mode: "link" })}>
                 <span className="glyph">🔗</span>
                 <span>リンクにする</span>
+              </div>
+              <div className="menu-item" onClick={() => setSelMenu({ ...selMenu, mode: "extlink" })}>
+                <span className="glyph">↗</span>
+                <span>外部リンクにする</span>
               </div>
               <div className="menu-item" onClick={() => setSelMenu({ ...selMenu, mode: "callout" })}>
                 <span className="glyph">💬</span>
@@ -1231,6 +1237,27 @@ export default function MemomentoApp() {
                   a.setAttribute("data-title", val);
                   a.classList.add("is-new");
                 }
+                applyWrap(a);
+              }}
+              onCancel={() => setSelMenu(null)}
+            />
+          )}
+          {selMenu.mode === "extlink" && (
+            <SelInputForm
+              placeholder="https://example.com"
+              confirmLabel="リンク作成"
+              initial=""
+              onConfirm={(val) => {
+                const url = normalizeExternalUrl(val);
+                if (!url) {
+                  toast("URLの形式が正しくありません");
+                  return;
+                }
+                const a = document.createElement("a");
+                a.className = "ext-link";
+                a.setAttribute("href", url);
+                a.setAttribute("target", "_blank");
+                a.setAttribute("rel", "noopener noreferrer");
                 applyWrap(a);
               }}
               onCancel={() => setSelMenu(null)}
@@ -1814,6 +1841,13 @@ function TextBlockView({
               editor.onWikilinkClick(link as HTMLAnchorElement, ref.current, block.id);
               return;
             }
+            const extLink = target.closest?.("a.ext-link") as HTMLAnchorElement | null;
+            if (extLink) {
+              e.preventDefault();
+              e.stopPropagation();
+              window.open(extLink.href, "_blank", "noopener,noreferrer");
+              return;
+            }
             const co = target.closest?.(".callout-inline");
             if (co) {
               e.preventDefault();
@@ -1995,6 +2029,13 @@ function OutlineTextField({
           e.preventDefault();
           e.stopPropagation();
           editor.onWikilinkClick(link as HTMLAnchorElement, ref.current, blockId, itemId);
+          return;
+        }
+        const extLink = target.closest?.("a.ext-link") as HTMLAnchorElement | null;
+        if (extLink) {
+          e.preventDefault();
+          e.stopPropagation();
+          window.open(extLink.href, "_blank", "noopener,noreferrer");
           return;
         }
         const co = target.closest?.(".callout-inline");

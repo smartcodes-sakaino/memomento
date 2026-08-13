@@ -25,6 +25,16 @@ function heading(level: number, text: string): string {
 
 export function htmlToText(html: string): string {
   return html
+    // 外部リンクはURLに意味があるため、Markdownのリンク記法として残す
+    .replace(
+      /<a\b[^>]*class="ext-link"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi,
+      "[$2]($1)"
+    )
+    .replace(
+      /<a\b[^>]*href="([^"]*)"[^>]*class="ext-link"[^>]*>([\s\S]*?)<\/a>/gi,
+      "[$2]($1)"
+    )
+    // それ以外のリンク(wikiリンク)は表示テキストだけを残す
     .replace(/<a\b[^>]*>([\s\S]*?)<\/a>/gi, "$1")
     .replace(/<strong>([\s\S]*?)<\/strong>/gi, "**$1**")
     .replace(/<em>([\s\S]*?)<\/em>/gi, "*$1*")

@@ -339,6 +339,12 @@ button { font-family: inherit; }
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
   background: var(--surface-low); border-radius: 5px; padding: 1px 6px; font-size: 0.9em;
 }
+.b-content .ext-link, .chk-text .ext-link, .list-text .ext-link {
+  color: var(--good); text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
+.b-content .ext-link::after, .chk-text .ext-link::after, .list-text .ext-link::after {
+  content: " ↗"; font-size: 0.85em;
+}
 .callout-inline {
   background: var(--cream); color: #8a6d1f;
   border-bottom: 1.5px dashed #e3cf8e;
