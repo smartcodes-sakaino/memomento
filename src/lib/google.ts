@@ -242,17 +242,6 @@ export async function appendValues(
   );
 }
 
-export async function clearValues(
-  env: GoogleEnv,
-  range: string
-): Promise<void> {
-  await googleFetch(
-    env,
-    `${SHEETS_BASE}/${env.sheetId}/values/${encodeURIComponent(range)}:clear`,
-    { method: "POST" }
-  );
-}
-
 // ---------- Drive ----------
 
 const DRIVE_BASE = "https://www.googleapis.com/drive/v3";

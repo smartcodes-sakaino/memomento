@@ -8,7 +8,6 @@
 import {
   appendValues,
   batchUpdateSpreadsheet,
-  clearValues,
   getSheetInfos,
   getValues,
   updateValues,
@@ -103,6 +102,34 @@ async function findPagesLikeSheet(
   return null;
 }
 
+/**
+ * シート本体(ヘッダーを除く2行目以降)を新しい内容でまるごと置き換える。
+ * 「全消去→書き込み」の2段階に分けると、PCの再起動や通信断で処理が途中で
+ * 止まった場合に、消去だけが実行されてシートが空のまま残ってしまう
+ * (実際にこれが原因でメモが消える事故が発生した)。
+ * そのため、古い行数に満たない分は空文字の行で埋めて1回のAPI呼び出しで
+ * 上書きし、「消えるだけで書き戻されない」瞬間が起こらないようにする。
+ */
+async function replaceSheetRows(
+  env: GoogleEnv,
+  sheet: string,
+  width: number,
+  previousRowCount: number,
+  rows: string[][]
+): Promise<void> {
+  const blankRow: string[] = Array(width).fill("");
+  const padded =
+    rows.length < previousRowCount
+      ? [
+          ...rows,
+          ...Array.from({ length: previousRowCount - rows.length }, () => blankRow),
+        ]
+      : rows;
+  if (padded.length > 0) {
+    await updateValues(env, `${sheet}!A2`, padded);
+  }
+}
+
 export interface AllData {
   pages: Page[];
   blocks: Block[];
@@ -160,7 +187,15 @@ export async function deletePageCascade(
   env: GoogleEnv,
   id: string
 ): Promise<string[]> {
-  const { pages, blocks } = await loadAll(env);
+  const [pageRows, blockRows] = await getValues(env, [
+    `${PAGES_SHEET}!A2:H`,
+    `${BLOCKS_SHEET}!A2:G`,
+  ]);
+  const pages = (pageRows ?? []).filter((r) => r[0]).map(rowToPage);
+  const blocks = (blockRows ?? [])
+    .map(rowToBlock)
+    .filter((b): b is Block => b !== null);
+
   const target = pages.find((p) => p.id === id);
   if (!target) return [];
 
@@ -168,14 +203,20 @@ export async function deletePageCascade(
   const keptPages = pages.filter((p) => !deleteIds.has(p.id));
   const keptBlocks = blocks.filter((b) => !deleteIds.has(b.pageId));
 
-  await clearValues(env, `${PAGES_SHEET}!A2:H`);
-  if (keptPages.length > 0) {
-    await updateValues(env, `${PAGES_SHEET}!A2`, keptPages.map(pageToRow));
-  }
-  await clearValues(env, `${BLOCKS_SHEET}!A2:G`);
-  if (keptBlocks.length > 0) {
-    await updateValues(env, `${BLOCKS_SHEET}!A2`, keptBlocks.map(blockToRow));
-  }
+  await replaceSheetRows(
+    env,
+    PAGES_SHEET,
+    8,
+    (pageRows ?? []).length,
+    keptPages.map(pageToRow)
+  );
+  await replaceSheetRows(
+    env,
+    BLOCKS_SHEET,
+    7,
+    (blockRows ?? []).length,
+    keptBlocks.map(blockToRow)
+  );
   return [...deleteIds];
 }
 
@@ -198,8 +239,11 @@ export async function putBlocks(
   }));
 
   const all = [...others, ...normalized];
-  await clearValues(env, `${BLOCKS_SHEET}!A2:G`);
-  if (all.length > 0) {
-    await updateValues(env, `${BLOCKS_SHEET}!A2`, all.map(blockToRow));
-  }
+  await replaceSheetRows(
+    env,
+    BLOCKS_SHEET,
+    7,
+    (blockRows ?? []).length,
+    all.map(blockToRow)
+  );
 }
