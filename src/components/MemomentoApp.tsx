@@ -14,6 +14,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -100,6 +101,49 @@ function newBlock(type: ClientBlock["type"]): ClientBlock {
   }
 }
 
+/**
+ * 選択メニュー・ブロックメニューをビューポート内に収まるよう位置調整する。
+ * クリック位置(x, y)をそのまま fixed 配置すると、画面下端/右端付近で開いた
+ * 場合にメニューが画面外にはみ出し、position: fixed のためスクロールしても
+ * 二度と表示されない事故が起きていた。実寸を測って毎回クランプする。
+ */
+function ClampedMenu({
+  x,
+  y,
+  className = "menu",
+  children,
+}: {
+  x: number;
+  y: number;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const margin = 8;
+    const rect = el.getBoundingClientRect();
+    const maxLeft = Math.max(margin, window.innerWidth - rect.width - margin);
+    const maxTop = Math.max(margin, window.innerHeight - rect.height - margin);
+    el.style.left = `${Math.min(Math.max(x, margin), maxLeft)}px`;
+    el.style.top = `${Math.min(Math.max(y, margin), maxTop)}px`;
+  }, [x, y]);
+  return (
+    <div ref={ref} className={className} style={{ left: x, top: y }}>
+      {children}
+    </div>
+  );
+}
+
+/** 要素自身だけを取り除き、中身(子ノード)はその場に残す(太字解除などに使う) */
+function unwrapElement(el: HTMLElement) {
+  const parent = el.parentNode;
+  if (!parent) return;
+  while (el.firstChild) parent.insertBefore(el.firstChild, el);
+  parent.removeChild(el);
+}
+
 function blockPlainText(b: ClientBlock): string {
   switch (b.type) {
     case "checklist":
@@ -145,7 +189,12 @@ export default function MemomentoApp() {
   const [toastMsg, setToastMsg] = useState("");
 
   type TypeMenuState = { x: number; y: number; blockId: string | null; insertBelow: boolean };
-  type SelMenuState = { x: number; y: number; mode: "menu" | "link" | "extlink" | "callout" };
+  type SelMenuState = {
+    x: number;
+    y: number;
+    mode: "menu" | "link" | "extlink" | "callout";
+    bold?: boolean;
+  };
   type IconPickerState = { x: number; y: number; pageId: string };
   type CalloutState = { x: number; y: number; text: string };
 
@@ -674,9 +723,31 @@ export default function MemomentoApp() {
       pendingContainerRef.current = container;
       pendingBlockIdRef.current = blockId;
       pendingItemIdRef.current = itemId ?? null;
-      setSelMenu({ x, y, mode: "menu" });
+      setSelMenu({ x, y, mode: "menu", bold: document.queryCommandState("bold") });
     },
     []
+  );
+
+  /** 選択範囲の変更(装飾の追加など)を、リスト項目/通常ブロックそれぞれの保存先に反映する */
+  const commitPendingSelectionChange = useCallback(
+    (container: HTMLElement, blockId: string, itemId: string | null) => {
+      if (itemId) {
+        const item = findListItem(blockId, itemId);
+        if (item) {
+          item.text = container.innerHTML;
+          scheduleBlockSave(currentPageIdRef.current);
+        }
+      } else {
+        const blocks = currentBlocks();
+        const b = blocks.find((x) => x.id === blockId);
+        if (b && isTexty(b)) {
+          b.html = container.innerHTML;
+          scheduleBlockSave(currentPageIdRef.current);
+        }
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [scheduleBlockSave]
   );
 
   const applyWrap = useCallback(
@@ -697,29 +768,50 @@ export default function MemomentoApp() {
         range.insertNode(wrapper);
       }
       sel?.removeAllRanges();
-      if (itemId) {
-        const item = findListItem(blockId, itemId);
-        if (item) {
-          item.text = container.innerHTML;
-          scheduleBlockSave(currentPageIdRef.current);
-        }
-      } else {
-        const blocks = currentBlocks();
-        const b = blocks.find((x) => x.id === blockId);
-        if (b && isTexty(b)) {
-          b.html = container.innerHTML;
-          scheduleBlockSave(currentPageIdRef.current);
-        }
-      }
+      commitPendingSelectionChange(container, blockId, itemId);
       pendingRangeRef.current = null;
       pendingContainerRef.current = null;
       pendingBlockIdRef.current = null;
       pendingItemIdRef.current = null;
       setSelMenu(null);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scheduleBlockSave]
+    [commitPendingSelectionChange]
   );
+
+  /**
+   * 太字のオン/オフを切り替える。既存のapplyWrapは常に新しい<strong>で包むだけで
+   * 解除ができなかったため、選択範囲が既に太字なら取り除く側に倒す。
+   * 選択範囲が<strong>要素の途中(テキストノードの一部)に収まっている場合、
+   * 単純にrange.extractContentsしただけでは<strong>要素自体は残ってしまう
+   * (要素の「外」に出るには祖先を分割する必要があるため)。この分割処理は
+   * 複雑でバグを生みやすいので、代わりに「選択範囲に重なる<strong>/<b>要素を
+   * 丸ごと解除する」という簡易な仕様にする(部分的な選択でも、その選択を含む
+   * 太字のかたまり全体が解除される)。
+   */
+  const toggleBold = useCallback(() => {
+    const range = pendingRangeRef.current;
+    const container = pendingContainerRef.current;
+    const blockId = pendingBlockIdRef.current;
+    const itemId = pendingItemIdRef.current;
+    if (!range || !container || !blockId) return;
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+    if (!document.queryCommandState("bold")) {
+      applyWrap(document.createElement("strong"));
+      return;
+    }
+    const boldEls = Array.from(container.querySelectorAll("strong, b")) as HTMLElement[];
+    const overlapping = boldEls.filter((el) => range.intersectsNode(el));
+    for (let i = overlapping.length - 1; i >= 0; i--) unwrapElement(overlapping[i]);
+    sel?.removeAllRanges();
+    commitPendingSelectionChange(container, blockId, itemId);
+    pendingRangeRef.current = null;
+    pendingContainerRef.current = null;
+    pendingBlockIdRef.current = null;
+    pendingItemIdRef.current = null;
+    setSelMenu(null);
+  }, [applyWrap, commitPendingSelectionChange]);
 
   // ---------------- 画像 ----------------
   const onImageFileSelected = useCallback(
@@ -1105,6 +1197,22 @@ export default function MemomentoApp() {
                   b && (b.type === "heading1" || b.type === "heading2") ? "paragraph" : b?.type ?? "paragraph";
                 insertBlock(blockId, nextType as ClientBlock["type"]);
               }}
+              onTextBackspace={(blockId, container) => {
+                const blocks = currentBlocks();
+                const idx = blocks.findIndex((x) => x.id === blockId);
+                if (idx <= 0) return;
+                const prev = blocks[idx - 1];
+                const current = blocks[idx];
+                if (!isTexty(prev) || !isTexty(current)) return;
+                const currentHtml = container.innerHTML;
+                const prevWasPlain = !/<[a-z][\s\S]*>/i.test(prev.html);
+                const mergeAt = prevWasPlain ? prev.html.length : 0;
+                prev.html = prev.html + currentHtml;
+                blocks.splice(idx, 1);
+                bump();
+                scheduleBlockSave(currentPage.id);
+                focusTextBlockAt(prev.id, mergeAt);
+              }}
               onWikilinkClick={(a, container, blockId, itemId) =>
                 void goToWikiTarget(a, container, blockId, itemId)
               }
@@ -1141,7 +1249,7 @@ export default function MemomentoApp() {
 
       {/* ================= ポップオーバー ================= */}
       {typeMenu && (
-        <div className="menu" style={{ left: typeMenu.x, top: typeMenu.y }}>
+        <ClampedMenu x={typeMenu.x} y={typeMenu.y}>
           {BLOCK_TYPE_DEFS.map((bt) => (
             <div
               key={bt.type}
@@ -1173,19 +1281,16 @@ export default function MemomentoApp() {
               </div>
             </>
           )}
-        </div>
+        </ClampedMenu>
       )}
 
       {selMenu && (
-        <div className="menu" style={{ left: selMenu.x, top: selMenu.y }}>
+        <ClampedMenu x={selMenu.x} y={selMenu.y}>
           {selMenu.mode === "menu" && (
             <>
-              <div
-                className="menu-item"
-                onClick={() => applyWrap(document.createElement("strong"))}
-              >
+              <div className="menu-item" onClick={toggleBold}>
                 <span className="glyph">B</span>
-                <span>太字にする</span>
+                <span>{selMenu.bold ? "太字を解除" : "太字にする"}</span>
               </div>
               <div className="menu-label">文字色</div>
               <div className="swatch-row">
@@ -1277,7 +1382,7 @@ export default function MemomentoApp() {
               onCancel={() => setSelMenu(null)}
             />
           )}
-        </div>
+        </ClampedMenu>
       )}
 
       {iconPicker && (
@@ -1638,6 +1743,7 @@ interface EditorProps {
   onAddTag: (tag: string) => void;
   onTextInput: (blockId: string, container: HTMLElement) => void;
   onTextEnter: (blockId: string) => void;
+  onTextBackspace: (blockId: string, container: HTMLElement) => void;
   onWikilinkClick: (a: HTMLAnchorElement, container: HTMLElement, blockId: string, itemId?: string) => void;
   onCalloutClick: (el: HTMLElement) => void;
   onContextSelection: (x: number, y: number, container: HTMLElement, blockId: string, itemId?: string) => void;
@@ -1830,6 +1936,11 @@ function TextBlockView({
               e.preventDefault();
               if (ref.current) editor.onTextInput(block.id, ref.current);
               editor.onTextEnter(block.id);
+              return;
+            }
+            if (e.key === "Backspace" && ref.current && isCaretAtVeryStart(ref.current)) {
+              e.preventDefault();
+              editor.onTextBackspace(block.id, ref.current);
             }
           }}
           onClick={(e) => {
@@ -1893,11 +2004,30 @@ function getCaretOffset(el: HTMLElement): number {
   return sel.getRangeAt(0).startOffset;
 }
 
+/** カーソルがel内の装飾を跨いだ本当の先頭(文字数0の位置)にあるかどうか */
+function isCaretAtVeryStart(el: HTMLElement): boolean {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return false;
+  const range = sel.getRangeAt(0);
+  if (!el.contains(range.startContainer)) return false;
+  const preRange = document.createRange();
+  preRange.selectNodeContents(el);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  return preRange.toString().length === 0;
+}
+
 function focusListItemField(blockId: string, itemId: string, selector: string, offset: number) {
   setTimeout(() => {
     const el = document.querySelector<HTMLElement>(
       `[data-block-id="${blockId}"] [data-item-id="${itemId}"] ${selector}`
     );
+    if (el) placeCaretInField(el, offset);
+  }, 0);
+}
+
+function focusTextBlockAt(blockId: string, offset: number) {
+  setTimeout(() => {
+    const el = document.querySelector<HTMLElement>(`[data-block-id="${blockId}"] .b-content`);
     if (el) placeCaretInField(el, offset);
   }, 0);
 }
