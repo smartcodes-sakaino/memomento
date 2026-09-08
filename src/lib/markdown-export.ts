@@ -23,8 +23,43 @@ function heading(level: number, text: string): string {
   return `${hashes} ${text}`;
 }
 
+/** 表セル1つ分のHTMLをMarkdownテキストに変換する(改行・パイプはテーブル記法を壊すため潰す) */
+function tableCellToText(cellHtml: string): string {
+  return htmlToText(cellHtml).replace(/\|/g, "\\|").replace(/\r?\n+/g, " ").trim();
+}
+
+/**
+ * <table>の中身をMarkdownの表記法に変換する。
+ * Googleドキュメントなどからの貼り付けで、本文(paragraph等)のHTMLに
+ * 生の<table>がそのまま埋め込まれることがあり、素通しで文字列除去すると
+ * セルの中身が区切りなく連結されてしまうため、専用に変換する。
+ */
+function tableHtmlToMarkdown(tableHtml: string): string {
+  const rows = Array.from(tableHtml.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)).map((m) =>
+    Array.from(m[1].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)).map((c) =>
+      tableCellToText(c[1])
+    )
+  );
+  if (rows.length === 0) return "";
+  const width = Math.max(...rows.map((r) => r.length));
+  const padded = rows.map((r) => {
+    const copy = r.slice();
+    while (copy.length < width) copy.push("");
+    return copy;
+  });
+  const [header, ...body] = padded;
+  const sep = header.map(() => "---");
+  return [header, sep, ...body].map((r) => `| ${r.join(" | ")} |`).join("\n");
+}
+
 export function htmlToText(html: string): string {
   return html
+    // 本文中に生の<table>が埋め込まれている場合(Googleドキュメント等からの貼り付け)、
+    // 他のタグ除去より先にMarkdownの表として変換しておく
+    .replace(/<table\b[^>]*>([\s\S]*?)<\/table>/gi, (_m, inner: string) => {
+      const md = tableHtmlToMarkdown(inner);
+      return md ? `\n\n${md}\n\n` : "";
+    })
     // 外部リンクはURLに意味があるため、Markdownのリンク記法として残す
     .replace(
       /<a\b[^>]*class="ext-link"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi,

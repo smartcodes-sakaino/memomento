@@ -45,6 +45,21 @@ describe("htmlToText", () => {
   it("HTMLエンティティがデコードされる", () => {
     expect(htmlToText("A &amp; B &lt;tag&gt;")).toBe("A & B <tag>");
   });
+  it("本文に埋め込まれた生の<table>はMarkdownの表になる(Googleドキュメント等からの貼り付け対策)", () => {
+    const html =
+      "<table><tbody>" +
+      "<tr><td><p>ID</p></td><td><p>headmaster_smartcodes</p></td></tr>" +
+      "<tr><td><p>メール</p></td><td><p>headmaster@smartcodes.jp</p></td></tr>" +
+      "</tbody></table>";
+    const md = htmlToText(html);
+    expect(md).toContain("| ID | headmaster_smartcodes |");
+    expect(md).toContain("| --- | --- |");
+    expect(md).toContain("| メール | headmaster@smartcodes.jp |");
+  });
+  it("表のセルの中の太字などの装飾もMarkdownに変換される", () => {
+    const html = "<table><tr><th><strong>項目</strong></th><th>値</th></tr></table>";
+    expect(htmlToText(html)).toContain("| **項目** | 値 |");
+  });
 });
 
 describe("renderPagesAsMarkdown", () => {
