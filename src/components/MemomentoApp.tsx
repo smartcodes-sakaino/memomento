@@ -19,7 +19,8 @@ import {
   useState,
 } from "react";
 import { escapeHtml, normalizeExternalUrl, syncLinkLabels } from "@/lib/wikilink";
-import { HOME_PAGE_ID, MAX_LIST_LEVEL } from "@/lib/types";
+import { HOME_PAGE_ID, MAX_LIST_LEVEL, type Page } from "@/lib/types";
+import { renderPagesAsMarkdown } from "@/lib/markdown-export";
 import {
   apiCreatePage,
   apiDeletePage,
@@ -32,6 +33,7 @@ import {
   apiUploadImage,
 } from "./api";
 import {
+  blocksToServer,
   fromServer,
   isTexty,
   seedModel,
@@ -185,6 +187,8 @@ export default function MemomentoApp() {
   const [nbSelected, setNbSelected] = useState<Set<string>>(new Set());
   const [nbTitle, setNbTitle] = useState("");
   const [nbBusy, setNbBusy] = useState(false);
+  const [mdOpen, setMdOpen] = useState(false);
+  const [mdText, setMdText] = useState("");
   const [health, setHealth] = useState<{ sheets: boolean; drive: boolean } | null>(null);
   const [toastMsg, setToastMsg] = useState("");
 
@@ -1164,6 +1168,32 @@ export default function MemomentoApp() {
           >
             📄 Googleドキュメントから追加
           </button>
+          <button
+            className="ghost-btn"
+            onClick={() => {
+              // ブロックをまたいだ範囲選択には対応していないため、代わりにこのページを
+              // まるごとMarkdownに変換してモーダルで表示し、そこからコピーしてもらう
+              const fakePage: Page = {
+                id: currentPage.id,
+                title: currentPage.title,
+                parentId: null,
+                orderIndex: 0,
+                icon: currentPage.icon,
+                tags: currentPage.tags,
+                createdAt: "",
+                updatedAt: "",
+              };
+              const md = renderPagesAsMarkdown(
+                [fakePage],
+                blocksToServer(currentPage.id, currentPage.blocks),
+                new Set([currentPage.id])
+              );
+              setMdText(md);
+              setMdOpen(true);
+            }}
+          >
+            📋 MDでコピー
+          </button>
         </div>
         <div className="editor-scroll">
           <div className="paper">
@@ -1635,6 +1665,53 @@ export default function MemomentoApp() {
                 }}
               >
                 {nbBusy ? "作成中…" : `作成(${nbSelected.size}件)`}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ================= Markdownコピー用モーダル ================= */}
+      {mdOpen && (
+        <>
+          <div className="modal-scrim" onClick={() => setMdOpen(false)} />
+          <div className="modal">
+            <div className="modal-head">
+              <h2>MDでコピー</h2>
+              <button className="icon-btn" onClick={() => setMdOpen(false)}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="panel-note">
+                このページの内容をMarkdown形式で表示しています。他アプリへの貼り付けにお使いください。
+              </p>
+              <textarea
+                className="md-copy-textarea"
+                readOnly
+                value={mdText}
+                onFocus={(e) => e.currentTarget.select()}
+              />
+            </div>
+            <div className="modal-foot">
+              <button className="ghost-btn" onClick={() => setMdOpen(false)}>
+                閉じる
+              </button>
+              <button
+                className="primary-btn"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(mdText);
+                    toast("クリップボードにコピーしました");
+                  } catch {
+                    toast("コピーに失敗しました。テキストを選択してコピーしてください");
+                  }
+                }}
+              >
+                コピーする
               </button>
             </div>
           </div>
