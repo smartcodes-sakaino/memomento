@@ -87,6 +87,24 @@ function placeCaretEnd(el: HTMLElement) {
   sel?.addRange(range);
 }
 
+/** ページ複製用に、ブロックの中身をそのままにIDだけ新規発行して複製する */
+function cloneBlockWithNewId(b: ClientBlock): ClientBlock {
+  const id = uid("b");
+  switch (b.type) {
+    case "checklist":
+      return { id, type: "checklist", items: b.items.map((it) => ({ ...it, id: uid("i") })) };
+    case "bulletlist":
+    case "numberlist":
+      return { id, type: b.type, items: b.items.map((it) => ({ ...it, id: uid("i") })) };
+    case "table":
+      return { id, type: "table", rows: b.rows.map((r) => [...r]) };
+    case "image":
+      return { id, type: "image", src: b.src, caption: b.caption };
+    default:
+      return { id, type: b.type, html: b.html };
+  }
+}
+
 function newBlock(type: ClientBlock["type"]): ClientBlock {
   switch (type) {
     case "checklist":
@@ -438,6 +456,29 @@ export default function MemomentoApp() {
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [bump, bumpTree, markSaved, toast]
+  );
+
+  /** ページを複製し、同じ親の下(兄弟)に新規ページとして追加する */
+  const duplicatePage = useCallback(
+    async (id: string) => {
+      const source = pageOf(id);
+      if (!source) return;
+      const newTitle = source.title ? `${source.title}のコピー` : "";
+      const newId = await createNewPage(source.parentId, newTitle);
+      const newPage = pageOf(newId);
+      if (!newPage) return;
+      newPage.icon = source.icon;
+      newPage.tags = [...source.tags];
+      newPage.blocks = source.blocks.map(cloneBlockWithNewId);
+      bump();
+      bumpTree();
+      patchPageRemote(newId, { icon: newPage.icon, tags: newPage.tags });
+      void flushBlockSave(newId);
+      selectPage(newId);
+      toast(`「${source.title || "無題のページ"}」を複製しました`);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [bump, bumpTree, createNewPage, flushBlockSave, patchPageRemote, selectPage, toast]
   );
 
   const reparentPage = useCallback(
@@ -986,6 +1027,19 @@ export default function MemomentoApp() {
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <line x1="12" y1="5" x2="12" y2="19" />
                 <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
+            <button
+              className="icon-btn"
+              title="このページを複製(同じ階層に追加)"
+              onClick={(e) => {
+                e.stopPropagation();
+                void duplicatePage(page.id);
+              }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <rect x="8" y="8" width="12" height="12" rx="1.5" />
+                <path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8" />
               </svg>
             </button>
             {page.id !== HOME_PAGE_ID && (
